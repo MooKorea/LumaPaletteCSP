@@ -11,6 +11,7 @@ const showPaletteBtn = document.getElementById("show-palette-btn");
 const languageSelect = document.getElementById("language-select");
 const altPickToggle = document.getElementById("alt-pick-toggle");
 const restrictToggle = document.getElementById("restrict-toggle");
+const gesturesToggle = document.getElementById("gestures-toggle");
 const wheelType = document.getElementById("wheel-type");
 const paletteOffset = document.getElementById("palette-offset");
 const shortcutEnabled = document.getElementById("shortcut-enabled");
@@ -48,6 +49,8 @@ const I18N = {
     paletteSettings: "Palette settings",
     restrictTitle: "Only respond when CSP is focused",
     restrictHelp: "Ignore palette shortcuts and ALT color pick while another app is active.",
+    gesturesTitle: "Color gestures: hold 1 / 2 / 3 and drag",
+    gesturesHelp: "Hold 1 (hue), 2 (saturation) or 3 (brightness) and drag left or right on the canvas. Esc or right-click cancels.",
     colorWheel: "Color wheel",
     palettePosition: "Palette position",
     keyboardShortcut: "Keyboard shortcut",
@@ -115,6 +118,8 @@ const I18N = {
     paletteSettings: "調色盤設定",
     restrictTitle: "只在 CSP 作用中時回應",
     restrictHelp: "其他程式作用中時，忽略快捷鍵與 ALT 取色。",
+    gesturesTitle: "色彩手勢：按住 1 / 2 / 3 並拖曳",
+    gesturesHelp: "按住 1（色相）、2（飽和度）或 3（亮度）並在畫布上左右拖曳。Esc 或右鍵取消。",
     colorWheel: "色盤模式",
     palettePosition: "調色盤位置",
     keyboardShortcut: "鍵盤快捷鍵",
@@ -200,6 +205,8 @@ function applyLanguage() {
   setText("main section:nth-of-type(4) h2", "paletteSettings");
   setText("#restrict-toggle + span strong", "restrictTitle");
   setText("#restrict-toggle + span small", "restrictHelp");
+  setText("#gestures-toggle + span strong", "gesturesTitle");
+  setText("#gestures-toggle + span small", "gesturesHelp");
   setText("label[for='wheel-type']", "colorWheel");
   setText("label[for='palette-offset']", "palettePosition");
   setText("main section:nth-of-type(5) h2", "keyboardShortcut");
@@ -262,6 +269,7 @@ function renderSettings(settings) {
   currentShortcut = settings.global_hotkey || "";
   altPickToggle.checked = !!settings.show_after_alt_pick;
   restrictToggle.checked = !!settings.restrict_to_csp;
+  gesturesToggle.checked = !!settings.color_gestures;
   wheelType.value = settings.wheel_type || "oklch";
   paletteOffset.value = settings.palette_offset || "bottom-right";
   applyLanguage();
@@ -474,6 +482,11 @@ altPickToggle.addEventListener("change", async () => {
 
 restrictToggle.addEventListener("change", async () => {
   await invoke("set_restrict_to_csp", { enabled: restrictToggle.checked });
+  await refresh();
+});
+
+gesturesToggle.addEventListener("change", async () => {
+  await invoke("set_color_gestures", { enabled: gesturesToggle.checked });
   await refresh();
 });
 

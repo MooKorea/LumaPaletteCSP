@@ -100,6 +100,114 @@ pub fn dismiss_palette(app: AppHandle) {
     hide_palette(&app, "shield-dismiss");
 }
 
+/// Escape from the keyboard hook: cancel a gesture in progress and/or close
+/// the palette.
+pub fn escape_pressed(app: &AppHandle) {
+    if input_hook::gesture_active() {
+        let _ = app.emit_to("shield", "gesture-cancel", ());
+    }
+    if input_hook::palette_visible() {
+        hide_palette(app, "escape");
+    }
+}
+
+#[derive(Serialize, Clone)]
+struct GestureArm {
+    dim: u8,
+    hex: String,
+    slot: u8,
+    wheel_type: String,
+    /// Cursor at key-down, in physical pixels relative to the shield's origin.
+    cursor_x: i32,
+    cursor_y: i32,
+}
+
+/// A gesture key (1 = hue, 2 = saturation, 3 = brightness) went down or up.
+/// Down: sync CSP's current color, raise the shield and arm the shield page.
+/// Up: tell the shield page; it ends the gesture itself once any drag in
+/// progress finishes.
+pub fn gesture_key(app: &AppHandle, dim: u8, down: bool) {
+    if !down {
+        let _ = app.emit_to("shield", "gesture-disarm", ());
+        return;
+    }
+    let state: State<'_, AppState> = app.state();
+    let settings = state.settings.get();
+    if !settings.color_gestures {
+        return;
+    }
+    if RESTRICT_TO_CSP.load(Ordering::Relaxed) && !input_hook::is_csp_foreground() {
+        crate::diag::log("gesture blocked: CSP not foreground");
+        return;
+    }
+    let (rgb, slot) = {
+        let mut guard = state.csp.lock().unwrap();
+        match guard.as_mut() {
+            Some(c) if c.connected => (c.get_color_rgb(), c.color_index()),
+            _ => (None, 0),
+        }
+    };
+    let (r, g, b) = rgb.unwrap_or((128, 128, 128));
+    input_hook::set_gesture_active(true);
+    let (left, top) = show_shield_window(app);
+    let (cx, cy) = get_cursor_pos();
+    let _ = app.emit_to(
+        "shield",
+        "gesture-arm",
+        GestureArm {
+            dim,
+            hex: format!("#{r:02x}{g:02x}{b:02x}"),
+            slot,
+            wheel_type: settings.wheel_type.clone(),
+            cursor_x: cx - left,
+            cursor_y: cy - top,
+        },
+    );
+    crate::diag::log(format!("gesture armed dim={dim} rgb=({r},{g},{b})"));
+}
+
+/// Live color from a gesture drag: write it to CSP and keep the palette in
+/// step if it happens to be open.
+#[tauri::command]
+pub fn gesture_color(app: AppHandle, state: State<'_, AppState>, hex: String) -> Result<(), String> {
+    let slot = {
+        let mut guard = state.csp.lock().unwrap();
+        let conn = guard.as_mut().ok_or("not connected")?;
+        conn.set_color_hex(&hex);
+        conn.color_index()
+    };
+    let hx = hex.trim_start_matches('#');
+    if hx.len() >= 6 {
+        if let (Ok(r), Ok(g), Ok(b)) = (
+            u8::from_str_radix(&hx[0..2], 16),
+            u8::from_str_radix(&hx[2..4], 16),
+            u8::from_str_radix(&hx[4..6], 16),
+        ) {
+            emit_color(&app, (r, g, b), slot);
+        }
+    }
+    Ok(())
+}
+
+/// The shield page finished (or abandoned) a gesture.
+#[tauri::command]
+pub fn gesture_end(app: AppHandle) {
+    input_hook::set_gesture_active(false);
+    crate::diag::log("gesture end");
+    if !input_hook::palette_visible() {
+        if let Some(shield) = app.get_webview_window("shield") {
+            let _ = shield.hide();
+        }
+    }
+}
+
+#[tauri::command]
+pub fn set_color_gestures(app: AppHandle, state: State<'_, AppState>, enabled: bool) {
+    input_hook::set_gestures_enabled(enabled);
+    state.settings.update(|s| s.color_gestures = enabled);
+    let _ = app.emit("settings-changed", state.settings.get());
+}
+
 #[tauri::command]
 pub fn debug_enabled() -> bool {
     crate::diag::enabled()
@@ -122,8 +230,16 @@ pub fn debug_log(msg: String) {
 pub fn show_shield(app: AppHandle) {
     crate::diag::log("show_shield");
     input_hook::set_palette_visible(true);
+    show_shield_window(&app);
+}
+
+/// Position the shield over every monitor, order it just under the palette,
+/// and show it (no activation). Shared by palette-open and gesture-arm.
+/// Returns the shield's top-left corner in physical screen pixels.
+fn show_shield_window(app: &AppHandle) -> (i32, i32) {
+    let mut origin = (0, 0);
     let Some(shield) = app.get_webview_window("shield") else {
-        return;
+        return origin;
     };
     #[cfg(target_os = "windows")]
     if let (Ok(shield_hwnd), Some(Ok(palette_hwnd))) = (
@@ -153,11 +269,13 @@ pub fn show_shield(app: AppHandle) {
             bottom = bottom.max(p.y + s.height as i32);
         }
         if left < right && top < bottom {
+            origin = (left, top);
             let _ = shield.set_position(PhysicalPosition::new(left, top));
             let _ = shield.set_size(PhysicalSize::new((right - left) as u32, (bottom - top) as u32));
         }
     }
     let _ = shield.show();
+    origin
 }
 
 pub fn show_status_settings(app: &AppHandle) {

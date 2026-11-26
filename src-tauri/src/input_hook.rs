@@ -16,6 +16,28 @@ pub fn set_palette_visible(visible: bool) {
     PALETTE_VISIBLE.store(visible, Ordering::Relaxed);
 }
 
+/// Color gestures: hold 1 / 2 / 3 (no modifiers) and drag on the shield to
+/// adjust hue / saturation / brightness. The hook tracks which key is held so
+/// auto-repeats are swallowed and the release ends the gesture.
+static GESTURES_ENABLED: AtomicBool = AtomicBool::new(false);
+static GESTURE_HELD: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+static GESTURE_ACTIVE: AtomicBool = AtomicBool::new(false);
+
+pub fn set_gestures_enabled(enabled: bool) {
+    GESTURES_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+pub fn set_gesture_active(active: bool) {
+    GESTURE_ACTIVE.store(active, Ordering::Relaxed);
+    if !active {
+        GESTURE_HELD.store(0, Ordering::Relaxed);
+    }
+}
+
+pub fn gesture_active() -> bool {
+    GESTURE_ACTIVE.load(Ordering::Relaxed)
+}
+
 pub fn palette_visible() -> bool {
     PALETTE_VISIBLE.load(Ordering::Relaxed)
 }
@@ -202,11 +224,12 @@ where
 }
 
 #[cfg(target_os = "windows")]
-pub fn install_shortcut<G, F, E>(get_shortcut: G, on_shortcut: F, on_escape: E)
+pub fn install_shortcut<G, F, E, K>(get_shortcut: G, on_shortcut: F, on_escape: E, on_gesture: K)
 where
     G: Fn() -> String + Send + Sync + 'static,
     F: Fn() + Send + Sync + 'static,
     E: Fn() + Send + Sync + 'static,
+    K: Fn(u8, bool) + Send + Sync + 'static,
 {
     use std::sync::atomic::AtomicU64;
     use std::sync::OnceLock;
@@ -222,6 +245,13 @@ where
     static GET_SHORTCUT: OnceLock<Box<dyn Fn() -> String + Send + Sync>> = OnceLock::new();
     static CALLBACK: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
     static ON_ESCAPE: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
+    static ON_GESTURE: OnceLock<Box<dyn Fn(u8, bool) + Send + Sync>> = OnceLock::new();
+    // Per gesture key (1/2/3): whether we have seen it go down without a
+    // matching up, and when it last went down (for auto-repeat detection).
+    static GESTURE_KEY_DOWN: [AtomicBool; 3] =
+        [AtomicBool::new(false), AtomicBool::new(false), AtomicBool::new(false)];
+    static GESTURE_LAST_DOWN_MS: [AtomicU64; 3] =
+        [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)];
     // ARMED drops on keydown and returns on keyup so auto-repeat fires once.
     // If the keyup never reaches us, a keydown later than Windows' slowest
     // repeat delay counts as a new press instead of leaving the shortcut jammed.
@@ -238,6 +268,7 @@ where
     let _ = GET_SHORTCUT.set(Box::new(get_shortcut));
     let _ = CALLBACK.set(Box::new(on_shortcut));
     let _ = ON_ESCAPE.set(Box::new(on_escape));
+    let _ = ON_GESTURE.set(Box::new(on_gesture));
 
     fn current_spec() -> Option<ShortcutSpec> {
         let accel = GET_SHORTCUT.get()?();
@@ -252,6 +283,81 @@ where
         ctrl == spec.ctrl && shift == spec.shift && alt == spec.alt && super_key == spec.super_key
     }
 
+    fn no_modifiers() -> bool {
+        !(key_down(VK_CONTROL.0 as i32)
+            || key_down(VK_SHIFT.0 as i32)
+            || key_down(VK_MENU.0 as i32)
+            || key_down(VK_LWIN.0 as i32)
+            || key_down(VK_RWIN.0 as i32))
+    }
+
+    /// Gesture-key handling. Returns Some(result) when the event is consumed.
+    /// The first press passes through to the app underneath (so typing "1"
+    /// still works); auto-repeats are swallowed. A different gesture key
+    /// pressed while one is held takes over, and releasing the active key
+    /// hands the gesture to any other gesture key still physically down, so
+    /// quick switches between keys never leave the user with no gesture.
+    fn handle_gesture_key(vk: u16, is_down: bool, is_up: bool, shortcut_vk: Option<u16>) -> Option<LRESULT> {
+        if !GESTURES_ENABLED.load(Ordering::Relaxed) || !(0x31..=0x33).contains(&vk) {
+            return None;
+        }
+        if shortcut_vk == Some(vk) {
+            return None; // the palette shortcut wins
+        }
+        let dim = (vk - 0x30) as u8;
+        let i = (dim - 1) as usize;
+        if is_down {
+            let now = now_ms();
+            let prev = GESTURE_LAST_DOWN_MS[i].swap(now, Ordering::Relaxed);
+            let was_down = GESTURE_KEY_DOWN[i].swap(true, Ordering::Relaxed);
+            // Already down and pressed again recently: auto-repeat. (The 1.1 s
+            // window keeps a lost keyup from jamming the key.)
+            if was_down && now.saturating_sub(prev) < REPEAT_WINDOW_MS {
+                return Some(LRESULT(1));
+            }
+            if !no_modifiers() {
+                return None;
+            }
+            if GESTURE_HELD.swap(dim, Ordering::Relaxed) != dim {
+                crate::diag::log(format!("hook gesture key {dim} down -> active"));
+                if let Some(cb) = ON_GESTURE.get() {
+                    cb(dim, true);
+                }
+            }
+            return None;
+        }
+        if is_up {
+            GESTURE_KEY_DOWN[i].store(false, Ordering::Relaxed);
+            if GESTURE_HELD.load(Ordering::Relaxed) == dim {
+                // Hand over to another gesture key that is still held (checked
+                // against the real key state, so a lost keyup can't fake it).
+                let other = (0..3usize).find(|&k| {
+                    k != i
+                        && GESTURE_KEY_DOWN[k].load(Ordering::Relaxed)
+                        && key_down(0x31 + k as i32)
+                });
+                match other {
+                    Some(k) => {
+                        let od = k as u8 + 1;
+                        GESTURE_HELD.store(od, Ordering::Relaxed);
+                        crate::diag::log(format!("hook gesture key {dim} up -> handoff to {od}"));
+                        if let Some(cb) = ON_GESTURE.get() {
+                            cb(od, true);
+                        }
+                    }
+                    None => {
+                        GESTURE_HELD.store(0, Ordering::Relaxed);
+                        crate::diag::log(format!("hook gesture key {dim} up -> end"));
+                        if let Some(cb) = ON_GESTURE.get() {
+                            cb(dim, false);
+                        }
+                    }
+                }
+            }
+        }
+        None
+    }
+
     unsafe extern "system" fn hook_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
         if code >= 0 {
             let msg = wparam.0 as u32;
@@ -263,9 +369,11 @@ where
                 crate::diag::log(format!("hook raw msg={msg:#x} vk={vk:#x} flags={:#x}", info.flags.0));
             }
 
-            // Escape closes the open palette and is swallowed so the app under
-            // it doesn't act on it too.
-            if vk == VK_ESCAPE.0 && PALETTE_VISIBLE.load(Ordering::Relaxed) {
+            // Escape closes the open palette / cancels a gesture and is
+            // swallowed so the app under it doesn't act on it too.
+            if vk == VK_ESCAPE.0
+                && (PALETTE_VISIBLE.load(Ordering::Relaxed) || GESTURE_ACTIVE.load(Ordering::Relaxed))
+            {
                 if is_down {
                     crate::diag::log("hook escape -> dismiss");
                     if let Some(cb) = ON_ESCAPE.get() {
@@ -277,7 +385,12 @@ where
                 }
             }
 
-            if let Some(spec) = current_spec() {
+            let spec = current_spec();
+            if let Some(r) = handle_gesture_key(vk, is_down, is_up, spec.as_ref().map(|s| s.vk_code)) {
+                return r;
+            }
+
+            if let Some(spec) = spec {
                 if is_down && vk == spec.vk_code && modifiers_match(&spec) {
                     let now = now_ms();
                     let prev = LAST_DOWN_MS.swap(now, Ordering::Relaxed);
@@ -333,11 +446,12 @@ where
 }
 
 #[cfg(not(target_os = "windows"))]
-pub fn install_shortcut<G, F, E>(_get_shortcut: G, _on_shortcut: F, _on_escape: E)
+pub fn install_shortcut<G, F, E, K>(_get_shortcut: G, _on_shortcut: F, _on_escape: E, _on_gesture: K)
 where
     G: Fn() -> String + Send + Sync + 'static,
     F: Fn() + Send + Sync + 'static,
     E: Fn() + Send + Sync + 'static,
+    K: Fn(u8, bool) + Send + Sync + 'static,
 {
     eprintln!("[HOOK] shortcut hook not implemented on this platform yet.");
 }

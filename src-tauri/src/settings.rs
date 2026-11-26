@@ -25,6 +25,9 @@ pub struct Settings {
     /// without losing the key they configured.
     #[serde(default)]
     pub hotkey_enabled: bool,
+    /// Hold 1 / 2 / 3 and drag to adjust hue / saturation / brightness.
+    #[serde(default = "always_true")]
+    pub color_gestures: bool,
     /// Whether ALT+left-click should summon Luma after CSP's own eyedropper
     /// commits the sampled brush color.
     #[serde(default = "always_true")]
@@ -68,6 +71,7 @@ impl Default for Settings {
             wheel_type: "oklch".into(),
             global_hotkey: default_hotkey(),
             hotkey_enabled: false,
+            color_gestures: true,
             show_after_alt_pick: true,
             has_seen_welcome: false,
             notify_on_startup: true,
