@@ -49,6 +49,10 @@ pub fn run() {
                 commands::RESTRICT_TO_CSP
                     .store(s.restrict_to_csp, std::sync::atomic::Ordering::Relaxed);
                 input_hook::set_gestures_enabled(s.color_gestures);
+                match input_hook::gesture_vks_from_keys(&s.gesture_keys) {
+                    Ok(vks) => input_hook::set_gesture_vks(vks),
+                    Err(e) => eprintln!("[HOOK] gesture keys in settings.json ignored: {e}"),
+                }
                 s
             };
 
@@ -312,6 +316,9 @@ pub fn run() {
             commands::gesture_color,
             commands::gesture_end,
             commands::set_color_gestures,
+            commands::set_gesture_keys,
+            commands::set_gesture_sensitivity,
+            commands::set_settings_tab,
             commands::debug_enabled,
             commands::debug_log,
             commands::start_qr_scan,

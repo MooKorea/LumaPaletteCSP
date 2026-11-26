@@ -22,6 +22,12 @@ pub fn set_palette_visible(visible: bool) {
 static GESTURES_ENABLED: AtomicBool = AtomicBool::new(false);
 static GESTURE_HELD: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 static GESTURE_ACTIVE: AtomicBool = AtomicBool::new(false);
+/// Virtual keys for hue / saturation / brightness; defaults to 1 / 2 / 3.
+static GESTURE_VKS: [std::sync::atomic::AtomicU16; 3] = [
+    std::sync::atomic::AtomicU16::new(0x31),
+    std::sync::atomic::AtomicU16::new(0x32),
+    std::sync::atomic::AtomicU16::new(0x33),
+];
 
 pub fn set_gestures_enabled(enabled: bool) {
     GESTURES_ENABLED.store(enabled, Ordering::Relaxed);
@@ -101,7 +107,35 @@ pub fn validate_shortcut(accel: &str) -> Result<(), String> {
     parse_shortcut(accel).map(|_| ())
 }
 
-fn vk_code_for_key(raw: &str) -> Result<u16, String> {
+/// The non-modifier key of an accelerator, if it parses.
+pub fn shortcut_vk(accel: &str) -> Option<u16> {
+    parse_shortcut(accel).ok().flatten().map(|s| s.vk_code)
+}
+
+/// Resolve three gesture key names (hue, saturation, brightness) to virtual
+/// keys: each must parse, and they must all differ.
+pub fn gesture_vks_from_keys(keys: &[String]) -> Result<[u16; 3], String> {
+    if keys.len() != 3 {
+        return Err("Three gesture keys are needed.".into());
+    }
+    let mut vks = [0u16; 3];
+    for (i, key) in keys.iter().enumerate() {
+        vks[i] = vk_code_for_key(key)?;
+    }
+    if vks[0] == vks[1] || vks[1] == vks[2] || vks[0] == vks[2] {
+        return Err("Each gesture needs a different key.".into());
+    }
+    Ok(vks)
+}
+
+/// Install the virtual keys the gesture hook listens for.
+pub fn set_gesture_vks(vks: [u16; 3]) {
+    for (i, vk) in vks.iter().enumerate() {
+        GESTURE_VKS[i].store(*vk, Ordering::Relaxed);
+    }
+}
+
+pub fn vk_code_for_key(raw: &str) -> Result<u16, String> {
     let key = raw.trim();
     if key.chars().count() == 1 {
         let ch = key.chars().next().unwrap();
@@ -298,14 +332,14 @@ where
     /// hands the gesture to any other gesture key still physically down, so
     /// quick switches between keys never leave the user with no gesture.
     fn handle_gesture_key(vk: u16, is_down: bool, is_up: bool, shortcut_vk: Option<u16>) -> Option<LRESULT> {
-        if !GESTURES_ENABLED.load(Ordering::Relaxed) || !(0x31..=0x33).contains(&vk) {
+        if !GESTURES_ENABLED.load(Ordering::Relaxed) {
             return None;
         }
+        let i = (0..3usize).find(|&k| GESTURE_VKS[k].load(Ordering::Relaxed) == vk)?;
         if shortcut_vk == Some(vk) {
             return None; // the palette shortcut wins
         }
-        let dim = (vk - 0x30) as u8;
-        let i = (dim - 1) as usize;
+        let dim = i as u8 + 1;
         if is_down {
             let now = now_ms();
             let prev = GESTURE_LAST_DOWN_MS[i].swap(now, Ordering::Relaxed);
@@ -334,7 +368,7 @@ where
                 let other = (0..3usize).find(|&k| {
                     k != i
                         && GESTURE_KEY_DOWN[k].load(Ordering::Relaxed)
-                        && key_down(0x31 + k as i32)
+                        && key_down(GESTURE_VKS[k].load(Ordering::Relaxed) as i32)
                 });
                 match other {
                     Some(k) => {

@@ -81,6 +81,39 @@ h2 {
   background: #3d2824;
 }
 
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 24px 0;
+  border-bottom: 1px solid #383b40;
+}
+
+.tab {
+  min-height: 0;
+  padding: 7px 14px 8px;
+  margin-bottom: -1px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: #aaa59a;
+}
+
+.tab:hover {
+  background: #2a2d33;
+  color: #ece9df;
+}
+
+.tab.active {
+  background: #27292e;
+  border-color: #3a3d42;
+  color: #ffe1a6;
+}
+
+.tab-page[hidden] {
+  display: none;
+}
+
 main {
   flex: 1;
   overflow: auto;
@@ -200,7 +233,7 @@ small {
   line-height: 1.35;
 }
 
-.shortcut-fields {
+.toggle-fields {
   margin: 13px 0 0;
   padding: 0;
   border: 0;
@@ -208,9 +241,27 @@ small {
   transition: opacity 0.15s;
 }
 
-.shortcut-fields:disabled {
+.toggle-fields:disabled {
   opacity: 0.4;
   pointer-events: none;
+}
+
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.range-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  accent-color: #e0a84a;
+}
+
+#gesture-sensitivity-value {
+  min-width: 52px;
+  text-align: right;
+  color: #ffe1a6;
 }
 
 .key-controls {

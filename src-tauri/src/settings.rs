@@ -25,9 +25,19 @@ pub struct Settings {
     /// without losing the key they configured.
     #[serde(default)]
     pub hotkey_enabled: bool,
-    /// Hold 1 / 2 / 3 and drag to adjust hue / saturation / brightness.
+    /// Hold a gesture key and drag to adjust one color dimension.
     #[serde(default = "always_true")]
     pub color_gestures: bool,
+    /// Gesture keys for hue / saturation / brightness (single keys, no
+    /// modifiers), as accelerator key names.
+    #[serde(default = "default_gesture_keys")]
+    pub gesture_keys: Vec<String>,
+    /// Pen travel in pixels for one full range (or one hue turn).
+    #[serde(default = "default_gesture_px")]
+    pub gesture_px_per_range: u32,
+    /// Last open tab of the settings window.
+    #[serde(default = "default_settings_tab")]
+    pub settings_tab: String,
     /// Whether ALT+left-click should summon Luma after CSP's own eyedropper
     /// commits the sampled brush color.
     #[serde(default = "always_true")]
@@ -52,6 +62,15 @@ pub struct Settings {
 fn default_hotkey() -> String {
     String::new()
 }
+fn default_gesture_keys() -> Vec<String> {
+    vec!["1".into(), "2".into(), "3".into()]
+}
+fn default_gesture_px() -> u32 {
+    100
+}
+fn default_settings_tab() -> String {
+    "connection".into()
+}
 fn default_language() -> String {
     "en".into()
 }
@@ -72,6 +91,9 @@ impl Default for Settings {
             global_hotkey: default_hotkey(),
             hotkey_enabled: false,
             color_gestures: true,
+            gesture_keys: default_gesture_keys(),
+            gesture_px_per_range: default_gesture_px(),
+            settings_tab: default_settings_tab(),
             show_after_alt_pick: true,
             has_seen_welcome: false,
             notify_on_startup: true,

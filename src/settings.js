@@ -11,7 +11,6 @@ const showPaletteBtn = document.getElementById("show-palette-btn");
 const languageSelect = document.getElementById("language-select");
 const altPickToggle = document.getElementById("alt-pick-toggle");
 const restrictToggle = document.getElementById("restrict-toggle");
-const gesturesToggle = document.getElementById("gestures-toggle");
 const wheelType = document.getElementById("wheel-type");
 const paletteOffset = document.getElementById("palette-offset");
 const shortcutEnabled = document.getElementById("shortcut-enabled");
@@ -21,12 +20,24 @@ const shortcutKeyBtn = document.getElementById("shortcut-key");
 const clearShortcutBtn = document.getElementById("clear-shortcut-btn");
 const shortcutSummary = document.getElementById("shortcut-summary");
 const shortcutMessage = document.getElementById("shortcut-message");
+const gesturesToggle = document.getElementById("gestures-toggle");
+const gesturesHelp = document.getElementById("gestures-help");
+const gestureFields = document.getElementById("gesture-fields");
+const gestureKeyBtns = [1, 2, 3].map((d) => document.getElementById(`gesture-key-${d}`));
+const gestureLabels = [1, 2, 3].map((d) => document.getElementById(`gesture-label-${d}`));
+const gestureSensitivity = document.getElementById("gesture-sensitivity");
+const gestureSensitivityValue = document.getElementById("gesture-sensitivity-value");
+const gestureHint = document.getElementById("gesture-hint");
+const gestureMessage = document.getElementById("gesture-message");
+const tabButtons = [...document.querySelectorAll(".tabs .tab")];
+const tabPages = [...document.querySelectorAll(".tab-page")];
 const closeBtn = document.getElementById("close-btn");
 
 let currentShortcut = "";
-let captureActive = false;
+let gestureKeys = ["1", "2", "3"];
 let connected = false;
 let language = "en";
+let currentTab = "connection";
 
 const I18N = {
   en: {
@@ -35,7 +46,10 @@ const I18N = {
     checking: "Checking",
     portableTitle: "Portable storage needs attention",
     portableBody: "Luma Palette saves settings.json and session.json beside the app. Move the app to a writable folder if settings or pairing do not persist.",
-    setup: "Setup",
+    tabConnection: "Connection",
+    tabPalette: "Palette",
+    tabGestures: "Gestures",
+    connection: "Connection",
     language: "Language",
     step1: "Open Clip Studio Paint.",
     step2: "Choose File > Connect to Smartphone.",
@@ -43,14 +57,12 @@ const I18N = {
     disconnectScan: "Disconnect and scan QR",
     forgetScan: "Forget session and scan QR",
     showPalette: "Show palette now",
-    colorPicking: "Color picking",
+    palette: "Palette",
+    triggers: "Triggers",
     altPickTitle: "Show palette after ALT color pick",
     altPickHelp: "After CSP samples the canvas color, Luma Palette opens at the cursor.",
-    paletteSettings: "Palette settings",
     restrictTitle: "Only respond when CSP is focused",
-    restrictHelp: "Ignore palette shortcuts and ALT color pick while another app is active.",
-    gesturesTitle: "Color gestures: hold 1 / 2 / 3 and drag",
-    gesturesHelp: "Hold 1 (hue), 2 (saturation) or 3 (brightness) and drag left or right on the canvas. Esc or right-click cancels.",
+    restrictHelp: "Ignore the shortcut, ALT color pick and color gestures while another app is active.",
     colorWheel: "Color wheel",
     palettePosition: "Palette position",
     keyboardShortcut: "Keyboard shortcut",
@@ -65,11 +77,25 @@ const I18N = {
     shortcutSummary: "Shortcut: {shortcut}",
     setKeyHint: "Click the key box and press a key to finish setting up the shortcut.",
     noModifierHint: "No modifier: the key still types into other apps. Turn on \"Only respond when CSP is focused\" above to keep it from triggering elsewhere.",
+    gestures: "Color gestures",
+    gesturesTitle: "Hold a key and drag to adjust one color dimension",
+    gesturesHelp: "Hold {k1} ({d1}), {k2} ({d2}) or {k3} ({d3}) and drag left or right on the canvas. Esc or right-click cancels.",
+    sensitivity: "Sensitivity",
+    sensitivityValue: "{px} px",
+    gestureHint: "Sensitivity is how far the pen travels for one full range (or one full turn of hue): smaller is faster. Keys are single keys without modifiers; the first press still reaches CSP, so pick keys CSP doesn't use.",
+    dimHue: "Hue",
+    dimSaturation: "Saturation",
+    dimChroma: "Chroma",
+    dimBrightness: "Brightness",
+    dimValue: "Value",
+    dimLightness: "Lightness",
+    gestureKeySet: "{dim} key set to {key}.",
+    gestureKeyCanceled: "Key recording canceled.",
+    gesturesDisabled: "Color gestures disabled.",
     storage: "Storage",
     settings: "Settings",
     pairing: "Pairing",
     close: "Close to tray",
-    off: "Off",
     connected: "Connected",
     scanning: "Scanning",
     reconnecting: "Reconnecting",
@@ -104,7 +130,10 @@ const I18N = {
     checking: "檢查中",
     portableTitle: "可攜式儲存需要注意",
     portableBody: "Luma Palette 會把 settings.json 和 session.json 儲存在程式旁邊。如果設定或配對無法保存，請把程式移到可寫入的資料夾。",
-    setup: "設定",
+    tabConnection: "連線",
+    tabPalette: "調色盤",
+    tabGestures: "手勢",
+    connection: "連線",
     language: "語言",
     step1: "開啟 Clip Studio Paint。",
     step2: "選擇「檔案 > 連接至智慧型手機」。",
@@ -112,14 +141,12 @@ const I18N = {
     disconnectScan: "中斷並掃描 QR",
     forgetScan: "清除配對並掃描 QR",
     showPalette: "立即顯示調色盤",
-    colorPicking: "取色",
+    palette: "調色盤",
+    triggers: "觸發方式",
     altPickTitle: "ALT 取色後顯示調色盤",
     altPickHelp: "CSP 完成畫布取色後，Luma Palette 會在游標旁開啟。",
-    paletteSettings: "調色盤設定",
     restrictTitle: "只在 CSP 作用中時回應",
-    restrictHelp: "其他程式作用中時，忽略快捷鍵與 ALT 取色。",
-    gesturesTitle: "色彩手勢：按住 1 / 2 / 3 並拖曳",
-    gesturesHelp: "按住 1（色相）、2（飽和度）或 3（亮度）並在畫布上左右拖曳。Esc 或右鍵取消。",
+    restrictHelp: "其他程式作用中時，忽略快捷鍵、ALT 取色與色彩手勢。",
     colorWheel: "色盤模式",
     palettePosition: "調色盤位置",
     keyboardShortcut: "鍵盤快捷鍵",
@@ -134,11 +161,25 @@ const I18N = {
     shortcutSummary: "快捷鍵：{shortcut}",
     setKeyHint: "點擊按鍵欄位並按下一個按鍵，即可完成快捷鍵設定。",
     noModifierHint: "未使用修飾鍵：該按鍵仍會輸入到其他程式。建議開啟上方的「只在 CSP 作用中時回應」，避免在其他程式中觸發。",
+    gestures: "色彩手勢",
+    gesturesTitle: "按住按鍵並拖曳，調整單一色彩維度",
+    gesturesHelp: "按住 {k1}（{d1}）、{k2}（{d2}）或 {k3}（{d3}）並在畫布上左右拖曳。Esc 或右鍵取消。",
+    sensitivity: "靈敏度",
+    sensitivityValue: "{px} px",
+    gestureHint: "靈敏度是筆尖移動多遠等於完整範圍（色相則為一整圈）：數值越小越快。按鍵為不含修飾鍵的單一按鍵；第一次按下仍會傳給 CSP，請選擇 CSP 未使用的按鍵。",
+    dimHue: "色相",
+    dimSaturation: "飽和度",
+    dimChroma: "彩度",
+    dimBrightness: "亮度",
+    dimValue: "明度",
+    dimLightness: "亮度",
+    gestureKeySet: "{dim}按鍵已設定為 {key}。",
+    gestureKeyCanceled: "已取消錄製按鍵。",
+    gesturesDisabled: "色彩手勢已停用。",
     storage: "儲存位置",
     settings: "設定",
     pairing: "配對",
     close: "關閉到系統匣",
-    off: "關閉",
     connected: "已連線",
     scanning: "掃描中",
     reconnecting: "重新連線",
@@ -173,7 +214,7 @@ function t(key, vars = {}) {
   const dict = I18N[language] || I18N.en;
   let value = dict[key] || I18N.en[key] || key;
   for (const [name, replacement] of Object.entries(vars)) {
-    value = value.replace(`{${name}}`, replacement);
+    value = value.replaceAll(`{${name}}`, replacement);
   }
   return value;
 }
@@ -188,37 +229,54 @@ function setOptionText(selector, key) {
   if (option) option.textContent = t(key);
 }
 
+// Names of the three gesture dimensions for the selected wheel type.
+function dimensionNames(type) {
+  switch (type) {
+    case "hsv": return [t("dimHue"), t("dimSaturation"), t("dimValue")];
+    case "hsl": return [t("dimHue"), t("dimSaturation"), t("dimLightness")];
+    case "lab": return [t("dimHue"), t("dimChroma"), t("dimLightness")];
+    case "oklch":
+    default: return [t("dimHue"), t("dimChroma"), t("dimLightness")];
+  }
+}
+
 function applyLanguage() {
   document.documentElement.lang = language === "zh-TW" ? "zh-Hant" : "en";
   document.title = t("documentTitle");
   setText("#portable-warning h2", "portableTitle");
   setText("#portable-warning p", "portableBody");
-  setText("main section:nth-of-type(2) h2", "setup");
+  for (const btn of tabButtons) {
+    const name = btn.dataset.tab;
+    btn.textContent = t(`tab${name.charAt(0).toUpperCase()}${name.slice(1)}`);
+  }
+  setText("#h-connection", "connection");
   setText("label[for='language-select']", "language");
-  setText("ol li:nth-child(1)", "step1");
-  setText("ol li:nth-child(2)", "step2");
-  setText("ol li:nth-child(3)", "step3");
+  setText("#setup-steps li:nth-child(1)", "step1");
+  setText("#setup-steps li:nth-child(2)", "step2");
+  setText("#setup-steps li:nth-child(3)", "step3");
   showPaletteBtn.textContent = t("showPalette");
-  setText("main section:nth-of-type(3) h2", "colorPicking");
-  setText("#alt-pick-toggle + span strong", "altPickTitle");
-  setText("#alt-pick-toggle + span small", "altPickHelp");
-  setText("main section:nth-of-type(4) h2", "paletteSettings");
-  setText("#restrict-toggle + span strong", "restrictTitle");
-  setText("#restrict-toggle + span small", "restrictHelp");
-  setText("#gestures-toggle + span strong", "gesturesTitle");
-  setText("#gestures-toggle + span small", "gesturesHelp");
+  setText("#h-storage", "storage");
+  setText("#dt-settings", "settings");
+  setText("#dt-pairing", "pairing");
+  setText("#h-palette", "palette");
   setText("label[for='wheel-type']", "colorWheel");
   setText("label[for='palette-offset']", "palettePosition");
-  setText("main section:nth-of-type(5) h2", "keyboardShortcut");
+  setText("#h-triggers", "triggers");
+  setText("#alt-pick-toggle + span strong", "altPickTitle");
+  setText("#alt-pick-toggle + span small", "altPickHelp");
+  setText("#restrict-toggle + span strong", "restrictTitle");
+  setText("#restrict-toggle + span small", "restrictHelp");
+  setText("#h-shortcut", "keyboardShortcut");
   setText("#shortcut-enabled + span strong", "shortcutTitle");
   setText("#shortcut-enabled + span small", "shortcutHelp");
   setText("label[for='shortcut-modifier']", "modifier");
   setOptionText("#shortcut-modifier option[value='']", "modNone");
   setText("label[for='shortcut-key']", "key");
   clearShortcutBtn.textContent = t("clear");
-  setText("main section:nth-of-type(6) h2", "storage");
-  setText("dt:nth-of-type(1)", "settings");
-  setText("dt:nth-of-type(2)", "pairing");
+  setText("#h-gestures", "gestures");
+  setText("#gestures-toggle + span strong", "gesturesTitle");
+  setText("#gesture-sensitivity-label", "sensitivity");
+  gestureHint.textContent = t("gestureHint");
   closeBtn.textContent = t("close");
 
   setOptionText("#wheel-type option[value='oklch']", "wheelOklch");
@@ -231,6 +289,25 @@ function applyLanguage() {
   setOptionText("#palette-offset option[value='top-left']", "posTl");
   setOptionText("#palette-offset option[value='center']", "posCenter");
 }
+
+// ---- tabs -----------------------------------------------------------------------
+
+function showTab(name, persist) {
+  if (!tabButtons.some((b) => b.dataset.tab === name)) name = "connection";
+  currentTab = name;
+  for (const btn of tabButtons) btn.classList.toggle("active", btn.dataset.tab === name);
+  for (const page of tabPages) page.hidden = page.dataset.page !== name;
+  if (persist) invoke("set_settings_tab", { tab: name }).catch(() => {});
+}
+
+for (const btn of tabButtons) {
+  btn.addEventListener("click", () => {
+    cancelCapture();
+    showTab(btn.dataset.tab, true);
+  });
+}
+
+// ---- rendering --------------------------------------------------------------------
 
 function renderPhase(phase) {
   statusLabel.textContent = phaseText(phase);
@@ -267,14 +344,31 @@ function renderSettings(settings) {
   language = settings.language || "en";
   languageSelect.value = language;
   currentShortcut = settings.global_hotkey || "";
+  gestureKeys = Array.isArray(settings.gesture_keys) && settings.gesture_keys.length === 3
+    ? settings.gesture_keys.map(String)
+    : ["1", "2", "3"];
   altPickToggle.checked = !!settings.show_after_alt_pick;
   restrictToggle.checked = !!settings.restrict_to_csp;
-  gesturesToggle.checked = !!settings.color_gestures;
   wheelType.value = settings.wheel_type || "oklch";
   paletteOffset.value = settings.palette_offset || "bottom-right";
   applyLanguage();
   renderShortcut(!!settings.hotkey_enabled);
+  renderGestures(settings);
   renderScanAction(connected);
+  if (settings.settings_tab && settings.settings_tab !== currentTab) showTab(settings.settings_tab, false);
+}
+
+function keyButtonContent(button, key) {
+  button.classList.remove("recording");
+  if (key) {
+    button.textContent = key;
+  } else {
+    button.innerHTML = "";
+    const placeholder = document.createElement("span");
+    placeholder.className = "placeholder";
+    placeholder.textContent = t("clickToSet");
+    button.appendChild(placeholder);
+  }
 }
 
 function renderShortcut(enabled) {
@@ -287,18 +381,7 @@ function renderShortcut(enabled) {
   // user's pending choice (default Ctrl) instead of resetting it on refresh.
   if (currentShortcut) syncModifierDropdown(mod);
 
-  if (!captureActive) {
-    shortcutKeyBtn.classList.remove("recording");
-    if (key) {
-      shortcutKeyBtn.textContent = key;
-    } else {
-      shortcutKeyBtn.innerHTML = "";
-      const placeholder = document.createElement("span");
-      placeholder.className = "placeholder";
-      placeholder.textContent = t("clickToSet");
-      shortcutKeyBtn.appendChild(placeholder);
-    }
-  }
+  if (capture?.button !== shortcutKeyBtn) keyButtonContent(shortcutKeyBtn, key);
 
   shortcutSummary.innerHTML = "";
   if (!key) {
@@ -316,6 +399,24 @@ function renderShortcut(enabled) {
       shortcutSummary.appendChild(warn);
     }
   }
+}
+
+function renderGestures(settings) {
+  const enabled = !!settings.color_gestures;
+  gesturesToggle.checked = enabled;
+  gestureFields.disabled = !enabled;
+  const names = dimensionNames(settings.wheel_type || "oklch");
+  gestureLabels.forEach((label, i) => { label.textContent = names[i]; });
+  gestureKeyBtns.forEach((btn, i) => {
+    if (capture?.button !== btn) keyButtonContent(btn, gestureKeys[i]);
+  });
+  gesturesHelp.textContent = t("gesturesHelp", {
+    k1: gestureKeys[0], k2: gestureKeys[1], k3: gestureKeys[2],
+    d1: names[0], d2: names[1], d3: names[2],
+  });
+  const px = Number(settings.gesture_px_per_range) || 100;
+  gestureSensitivity.value = String(px);
+  gestureSensitivityValue.textContent = t("sensitivityValue", { px });
 }
 
 function renderPortable(portable) {
@@ -337,8 +438,10 @@ async function refresh() {
   renderScanAction(snapshot.connected);
 }
 
+// ---- key recording ---------------------------------------------------------------
+
 // US-layout shifted symbols → the unshifted key they live on, so holding Shift
-// while recording still stores the base key (the dropdown owns modifiers).
+// while recording still stores the base key.
 const SHIFTED_SYMBOLS = {
   "~": "`", "_": "-", "+": "=", "{": "[", "}": "]", "|": "\\",
   ":": ";", '"': "'", "<": ",", ">": ".", "?": "/",
@@ -346,8 +449,6 @@ const SHIFTED_SYMBOLS = {
   "&": "7", "*": "8", "(": "9", ")": "0",
 };
 
-// The modifier comes from the dropdown; recording captures only the
-// non-modifier key.
 function keyFromEvent(e) {
   let key = e.key;
   if (["Control", "Shift", "Alt", "Meta", "Dead", "Unidentified"].includes(key)) return null;
@@ -390,66 +491,103 @@ function syncModifierDropdown(mod) {
   shortcutModifier.value = mod;
 }
 
-// Recording lives inside the key button: clicking it arms capture, and
-// anything that takes focus away (clicking elsewhere, unchecking, Clear,
-// switching windows) cancels. Esc cancels too.
-function startCapture() {
-  if (captureActive || shortcutFields.disabled) return;
-  captureActive = true;
-  shortcutKeyBtn.classList.add("recording");
-  shortcutKeyBtn.textContent = t("pressKey");
-  shortcutMessage.textContent = "";
-  shortcutKeyBtn.focus();
+// One recorder shared by every key field. Clicking a field arms it; anything
+// that takes focus away (clicking elsewhere, unchecking, switching tabs or
+// windows) cancels, and so does Esc. `apply(key)` persists the key and
+// resolves to the success message, or throws with the error to show.
+let capture = null; // { button, fieldset, message, canceled, apply }
+let captureEndedAt = 0;
+
+function startCapture(spec) {
+  if (capture || spec.fieldset.disabled) return;
+  capture = spec;
+  spec.button.classList.add("recording");
+  spec.button.textContent = t("pressKey");
+  spec.message.textContent = "";
+  spec.button.focus();
   document.addEventListener("keydown", onCaptureKey, true);
-  shortcutKeyBtn.addEventListener("blur", cancelCapture);
+  spec.button.addEventListener("blur", cancelCapture);
   window.addEventListener("blur", cancelCapture);
 }
 
-let captureEndedAt = 0;
-
 function stopCapture() {
-  if (!captureActive) return;
-  captureActive = false;
+  if (!capture) return null;
+  const spec = capture;
+  capture = null;
   captureEndedAt = performance.now();
   document.removeEventListener("keydown", onCaptureKey, true);
-  shortcutKeyBtn.removeEventListener("blur", cancelCapture);
+  spec.button.removeEventListener("blur", cancelCapture);
   window.removeEventListener("blur", cancelCapture);
-  renderShortcut(shortcutEnabled.checked);
+  return spec;
 }
 
 function cancelCapture() {
-  if (!captureActive) return;
-  stopCapture();
-  shortcutMessage.textContent = t("shortcutCanceled");
+  const spec = stopCapture();
+  if (!spec) return;
+  spec.message.textContent = spec.canceled;
+  refresh().catch(() => {});
 }
 
 async function onCaptureKey(e) {
-  if (!captureActive) return;
+  if (!capture) return;
   e.preventDefault();
   e.stopPropagation();
-
   if (e.key === "Escape") {
     cancelCapture();
     return;
   }
-
   const key = keyFromEvent(e);
   if (!key) return;
-  const accel = composeAccel(shortcutModifier.value, key);
-
-  shortcutKeyBtn.textContent = key;
-  shortcutMessage.textContent = t("registering");
+  const spec = capture;
+  spec.button.textContent = key;
   try {
-    await invoke("set_global_hotkey", { hotkey: accel });
+    const message = await spec.apply(key);
     stopCapture();
-    shortcutMessage.textContent = t("shortcutSet", { shortcut: accel });
+    spec.message.textContent = message;
     await refresh();
   } catch (err) {
-    shortcutMessage.textContent = String(err);
-    shortcutKeyBtn.textContent = t("pressAnother");
-    shortcutKeyBtn.focus();
+    spec.message.textContent = String(err);
+    spec.button.textContent = t("pressAnother");
+    spec.button.focus();
   }
 }
+
+// A key button clicked via keyboard right after recording ended (Space's
+// keyup "clicks" the focused button) must not restart recording.
+function onKeyFieldClick(e, spec) {
+  if (e.detail === 0 && performance.now() - captureEndedAt < 300) return;
+  startCapture(spec);
+}
+
+const shortcutCaptureSpec = {
+  button: shortcutKeyBtn,
+  fieldset: shortcutFields,
+  message: shortcutMessage,
+  get canceled() { return t("shortcutCanceled"); },
+  async apply(key) {
+    const accel = composeAccel(shortcutModifier.value, key);
+    await invoke("set_global_hotkey", { hotkey: accel });
+    return t("shortcutSet", { shortcut: accel });
+  },
+};
+
+function gestureCaptureSpec(i) {
+  return {
+    button: gestureKeyBtns[i],
+    fieldset: gestureFields,
+    message: gestureMessage,
+    get canceled() { return t("gestureKeyCanceled"); },
+    async apply(key) {
+      const keys = [...gestureKeys];
+      keys[i] = key;
+      await invoke("set_gesture_keys", { keys });
+      const names = dimensionNames(wheelType.value);
+      return t("gestureKeySet", { dim: names[i], key });
+    },
+  };
+}
+
+// ---- wiring --------------------------------------------------------------------------
 
 scanBtn.addEventListener("click", () => {
   scanBtn.disabled = true;
@@ -485,11 +623,6 @@ restrictToggle.addEventListener("change", async () => {
   await refresh();
 });
 
-gesturesToggle.addEventListener("change", async () => {
-  await invoke("set_color_gestures", { enabled: gesturesToggle.checked });
-  await refresh();
-});
-
 wheelType.addEventListener("change", async () => {
   await invoke("set_wheel_type", { wheelType: wheelType.value });
   await refresh();
@@ -508,15 +641,10 @@ shortcutEnabled.addEventListener("change", async () => {
   await refresh();
   // Enabling with no key yet: jump straight into recording so the next
   // keypress finishes setup.
-  if (enabled && !currentShortcut) startCapture();
+  if (enabled && !currentShortcut) startCapture(shortcutCaptureSpec);
 });
 
-shortcutKeyBtn.addEventListener("click", (e) => {
-  // Recording Space ends on keydown, but the keyup still "clicks" the focused
-  // button (detail 0 = keyboard-activated); don't let it restart recording.
-  if (e.detail === 0 && performance.now() - captureEndedAt < 300) return;
-  startCapture();
-});
+shortcutKeyBtn.addEventListener("click", (e) => onKeyFieldClick(e, shortcutCaptureSpec));
 
 shortcutModifier.addEventListener("change", async () => {
   const { key } = splitShortcut(currentShortcut);
@@ -537,6 +665,26 @@ clearShortcutBtn.addEventListener("click", async () => {
   cancelCapture();
   await invoke("set_global_hotkey", { hotkey: "" });
   shortcutMessage.textContent = t("shortcutCleared");
+  await refresh();
+});
+
+gesturesToggle.addEventListener("change", async () => {
+  const enabled = gesturesToggle.checked;
+  if (!enabled) cancelCapture();
+  await invoke("set_color_gestures", { enabled });
+  gestureMessage.textContent = enabled ? "" : t("gesturesDisabled");
+  await refresh();
+});
+
+gestureKeyBtns.forEach((btn, i) => {
+  btn.addEventListener("click", (e) => onKeyFieldClick(e, gestureCaptureSpec(i)));
+});
+
+gestureSensitivity.addEventListener("input", () => {
+  gestureSensitivityValue.textContent = t("sensitivityValue", { px: gestureSensitivity.value });
+});
+gestureSensitivity.addEventListener("change", async () => {
+  await invoke("set_gesture_sensitivity", { px: Number(gestureSensitivity.value) });
   await refresh();
 });
 
@@ -569,6 +717,7 @@ listen("csp-process-status", () => {
   });
 });
 
+showTab("connection", false);
 invoke("mark_welcome_seen").catch(() => {});
 refresh().catch((err) => {
   statusLabel.textContent = String(err);

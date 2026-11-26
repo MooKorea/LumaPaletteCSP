@@ -120,6 +120,8 @@ struct GestureArm {
     /// Cursor at key-down, in physical pixels relative to the shield's origin.
     cursor_x: i32,
     cursor_y: i32,
+    /// Pen travel for one full range, in CSS pixels.
+    drag_px_per_range: u32,
 }
 
 /// A gesture key (1 = hue, 2 = saturation, 3 = brightness) went down or up.
@@ -161,6 +163,7 @@ pub fn gesture_key(app: &AppHandle, dim: u8, down: bool) {
             wheel_type: settings.wheel_type.clone(),
             cursor_x: cx - left,
             cursor_y: cy - top,
+            drag_px_per_range: settings.gesture_px_per_range.clamp(20, 600),
         },
     );
     crate::diag::log(format!("gesture armed dim={dim} rgb=({r},{g},{b})"));
@@ -206,6 +209,38 @@ pub fn set_color_gestures(app: AppHandle, state: State<'_, AppState>, enabled: b
     input_hook::set_gestures_enabled(enabled);
     state.settings.update(|s| s.color_gestures = enabled);
     let _ = app.emit("settings-changed", state.settings.get());
+}
+
+#[tauri::command]
+pub fn set_gesture_keys(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    keys: Vec<String>,
+) -> Result<(), String> {
+    let vks = input_hook::gesture_vks_from_keys(&keys)?;
+    let settings = state.settings.get();
+    if settings.hotkey_enabled {
+        if let Some(shortcut) = input_hook::shortcut_vk(&settings.global_hotkey) {
+            if vks.contains(&shortcut) {
+                return Err("That key is the palette shortcut's key.".into());
+            }
+        }
+    }
+    input_hook::set_gesture_vks(vks);
+    state.settings.update(|s| s.gesture_keys = keys);
+    let _ = app.emit("settings-changed", state.settings.get());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_gesture_sensitivity(app: AppHandle, state: State<'_, AppState>, px: u32) {
+    state.settings.update(|s| s.gesture_px_per_range = px.clamp(20, 600));
+    let _ = app.emit("settings-changed", state.settings.get());
+}
+
+#[tauri::command]
+pub fn set_settings_tab(state: State<'_, AppState>, tab: String) {
+    state.settings.update(|s| s.settings_tab = tab);
 }
 
 #[tauri::command]

@@ -17,7 +17,7 @@ import { lab2rgb, rgb2lab } from "./lab.js";
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
-const DRAG_PX_PER_RANGE = 100; // pen travel for one full range / one hue turn
+let dragPxPerRange = 100; // pen travel for one full range / one hue turn (settings)
 const TAPE_PX_PER_RANGE = 300; // how much of the tape one full range spans
 const SEND_INTERVAL_MS = 100;
 const TAPE_W = 320;
@@ -124,7 +124,8 @@ let pendingHex = null;
 // ---- events from Rust -----------------------------------------------------------
 
 listen("gesture-arm", (evt) => {
-  const { dim: d, hex, wheel_type: wheelType, cursor_x: cx, cursor_y: cy } = evt.payload;
+  const { dim: d, hex, wheel_type: wheelType, cursor_x: cx, cursor_y: cy, drag_px_per_range: dragPx } = evt.payload;
+  if (dragPx > 0) dragPxPerRange = dragPx;
   keyHeld = true;
   const nextModel = MODELS[wheelType] || MODELS.oklch;
   if (mode === "dragging") {
@@ -195,7 +196,7 @@ surface.addEventListener("pointermove", (e) => {
   if (mode !== "dragging" || e.pointerId !== pointerId) return;
   const dx = e.clientX - lastX;
   lastX = e.clientX;
-  const step = dx / DRAG_PX_PER_RANGE;
+  const step = dx / dragPxPerRange;
   const i = dim - 1;
   comps[i] = dim === 1 ? wrap01(comps[i] + step) : clamp01(comps[i] + step);
   renderHud();
