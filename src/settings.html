@@ -16,6 +16,12 @@
       <span id="connection-pill">Checking</span>
     </header>
 
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab" data-tab="connection" role="tab">Connection</button>
+      <button type="button" class="tab" data-tab="palette" role="tab">Palette</button>
+      <button type="button" class="tab" data-tab="gestures" role="tab">Gestures</button>
+    </nav>
+
     <main>
       <section class="panel" id="portable-warning" hidden>
         <h2>Portable storage needs attention</h2>
@@ -26,112 +32,154 @@
         </p>
       </section>
 
-      <section class="panel">
-        <h2>Setup</h2>
-        <div class="field-row">
-          <label for="language-select">Language</label>
-          <select id="language-select">
-            <option value="en">English</option>
-            <option value="zh-TW">繁體中文</option>
-          </select>
-        </div>
-        <ol>
-          <li>Open Clip Studio Paint.</li>
-          <li>Choose <code>File &gt; Connect to Smartphone</code>.</li>
-          <li>Keep the QR code visible while Luma Palette scans.</li>
-        </ol>
-        <div class="actions">
-          <button id="scan-btn">Disconnect and scan QR</button>
-          <button id="show-palette-btn">Show palette now</button>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Color picking</h2>
-        <label class="check-row">
-          <input type="checkbox" id="alt-pick-toggle" />
-          <span>
-            <strong>Show palette after ALT color pick</strong>
-            <small>After CSP samples the canvas color, Luma Palette opens at the cursor.</small>
-          </span>
-        </label>
-      </section>
-
-      <section class="panel">
-        <h2>Palette settings</h2>
-        <label class="check-row">
-          <input type="checkbox" id="restrict-toggle" />
-          <span>
-            <strong>Only respond when CSP is focused</strong>
-            <small>Ignore palette shortcuts and ALT color pick while another app is active.</small>
-          </span>
-        </label>
-        <div class="field-row">
-          <label for="wheel-type">Color wheel</label>
-          <select id="wheel-type">
-            <option value="oklch">OKLCH (perceptual)</option>
-            <option value="hsv">HSV (CSP native)</option>
-            <option value="hsl">HSL (classic)</option>
-            <option value="lab">Photoshop Lab</option>
-          </select>
-        </div>
-        <div class="field-row">
-          <label for="palette-offset">Palette position</label>
-          <select id="palette-offset">
-            <option value="bottom-right">Bottom-right of cursor</option>
-            <option value="bottom-left">Bottom-left of cursor (left-handed)</option>
-            <option value="top-right">Top-right of cursor</option>
-            <option value="top-left">Top-left of cursor</option>
-            <option value="center">Centered on cursor</option>
-          </select>
-        </div>
-      </section>
-
-      <section class="panel">
-        <h2>Keyboard shortcut</h2>
-        <label class="check-row">
-          <input type="checkbox" id="shortcut-enabled" />
-          <span>
-            <strong>Enable keyboard shortcut</strong>
-            <small>Use one custom shortcut to show the palette at the cursor.</small>
-          </span>
-        </label>
-        <fieldset id="shortcut-fields" class="shortcut-fields" disabled>
+      <div class="tab-page" data-page="connection">
+        <section class="panel">
+          <h2 id="h-connection">Connection</h2>
           <div class="field-row">
-            <label for="shortcut-modifier">Modifier</label>
-            <select id="shortcut-modifier">
-              <option value="Ctrl" selected>Ctrl</option>
-              <option value="Shift">Shift</option>
-              <option value="Alt">Alt</option>
-              <option value="Ctrl+Shift">Ctrl+Shift</option>
-              <option value="Ctrl+Alt">Ctrl+Alt</option>
-              <option value="Shift+Alt">Shift+Alt</option>
-              <option value="">None</option>
+            <label for="language-select">Language</label>
+            <select id="language-select">
+              <option value="en">English</option>
+              <option value="zh-TW">繁體中文</option>
+            </select>
+          </div>
+          <ol id="setup-steps">
+            <li>Open Clip Studio Paint.</li>
+            <li>Choose <code>File &gt; Connect to Smartphone</code>.</li>
+            <li>Keep the QR code visible while Luma Palette scans.</li>
+          </ol>
+          <div class="actions">
+            <button id="scan-btn">Disconnect and scan QR</button>
+          </div>
+        </section>
+
+        <section class="panel compact">
+          <h2 id="h-storage">Storage</h2>
+          <dl>
+            <dt id="dt-settings">Settings</dt>
+            <dd id="settings-path">...</dd>
+            <dt id="dt-pairing">Pairing</dt>
+            <dd id="session-path">...</dd>
+          </dl>
+        </section>
+      </div>
+
+      <div class="tab-page" data-page="palette" hidden>
+        <section class="panel">
+          <h2 id="h-palette">Palette</h2>
+          <div class="field-row">
+            <label for="wheel-type">Color wheel</label>
+            <select id="wheel-type">
+              <option value="oklch">OKLCH (perceptual)</option>
+              <option value="hsv">HSV (CSP native)</option>
+              <option value="hsl">HSL (classic)</option>
+              <option value="lab">Photoshop Lab</option>
             </select>
           </div>
           <div class="field-row">
-            <label for="shortcut-key">Key</label>
-            <div class="key-controls">
-              <button type="button" id="shortcut-key" class="key-field">
-                <span class="placeholder">Click to set</span>
-              </button>
-              <button type="button" id="clear-shortcut-btn">Clear</button>
-            </div>
+            <label for="palette-offset">Palette position</label>
+            <select id="palette-offset">
+              <option value="bottom-right">Bottom-right of cursor</option>
+              <option value="bottom-left">Bottom-left of cursor (left-handed)</option>
+              <option value="top-right">Top-right of cursor</option>
+              <option value="top-left">Top-left of cursor</option>
+              <option value="center">Centered on cursor</option>
+            </select>
           </div>
-          <p class="hint" id="shortcut-summary"></p>
-        </fieldset>
-        <p class="message" id="shortcut-message"></p>
-      </section>
+          <div class="actions">
+            <button id="show-palette-btn">Show palette now</button>
+          </div>
+        </section>
 
-      <section class="panel compact">
-        <h2>Storage</h2>
-        <dl>
-          <dt>Settings</dt>
-          <dd id="settings-path">...</dd>
-          <dt>Pairing</dt>
-          <dd id="session-path">...</dd>
-        </dl>
-      </section>
+        <section class="panel">
+          <h2 id="h-triggers">Triggers</h2>
+          <label class="check-row">
+            <input type="checkbox" id="alt-pick-toggle" />
+            <span>
+              <strong>Show palette after ALT color pick</strong>
+              <small>After CSP samples the canvas color, Luma Palette opens at the cursor.</small>
+            </span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="restrict-toggle" />
+            <span>
+              <strong>Only respond when CSP is focused</strong>
+              <small>Ignore the shortcut, ALT color pick and color gestures while another app is active.</small>
+            </span>
+          </label>
+        </section>
+
+        <section class="panel">
+          <h2 id="h-shortcut">Keyboard shortcut</h2>
+          <label class="check-row">
+            <input type="checkbox" id="shortcut-enabled" />
+            <span>
+              <strong>Enable keyboard shortcut</strong>
+              <small>Show the palette at the cursor with a key of your choice.</small>
+            </span>
+          </label>
+          <fieldset id="shortcut-fields" class="toggle-fields" disabled>
+            <div class="field-row">
+              <label for="shortcut-modifier">Modifier</label>
+              <select id="shortcut-modifier">
+                <option value="Ctrl" selected>Ctrl</option>
+                <option value="Shift">Shift</option>
+                <option value="Alt">Alt</option>
+                <option value="Ctrl+Shift">Ctrl+Shift</option>
+                <option value="Ctrl+Alt">Ctrl+Alt</option>
+                <option value="Shift+Alt">Shift+Alt</option>
+                <option value="">None</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <label for="shortcut-key">Key</label>
+              <div class="key-controls">
+                <button type="button" id="shortcut-key" class="key-field">
+                  <span class="placeholder">Click to set</span>
+                </button>
+                <button type="button" id="clear-shortcut-btn">Clear</button>
+              </div>
+            </div>
+            <p class="hint" id="shortcut-summary"></p>
+          </fieldset>
+          <p class="message" id="shortcut-message"></p>
+        </section>
+      </div>
+
+      <div class="tab-page" data-page="gestures" hidden>
+        <section class="panel">
+          <h2 id="h-gestures">Color gestures</h2>
+          <label class="check-row">
+            <input type="checkbox" id="gestures-toggle" />
+            <span>
+              <strong>Hold a key and drag to adjust one color dimension</strong>
+              <small id="gestures-help"></small>
+            </span>
+          </label>
+          <fieldset id="gesture-fields" class="toggle-fields" disabled>
+            <div class="field-row">
+              <label for="gesture-key-1" id="gesture-label-1">Hue</label>
+              <button type="button" id="gesture-key-1" class="key-field" data-dim="1"></button>
+            </div>
+            <div class="field-row">
+              <label for="gesture-key-2" id="gesture-label-2">Saturation</label>
+              <button type="button" id="gesture-key-2" class="key-field" data-dim="2"></button>
+            </div>
+            <div class="field-row">
+              <label for="gesture-key-3" id="gesture-label-3">Brightness</label>
+              <button type="button" id="gesture-key-3" class="key-field" data-dim="3"></button>
+            </div>
+            <div class="field-row">
+              <label for="gesture-sensitivity" id="gesture-sensitivity-label">Sensitivity</label>
+              <div class="range-row">
+                <input type="range" id="gesture-sensitivity" min="40" max="300" step="10" />
+                <span id="gesture-sensitivity-value">100 px</span>
+              </div>
+            </div>
+            <p class="hint" id="gesture-hint"></p>
+          </fieldset>
+          <p class="message" id="gesture-message"></p>
+        </section>
+      </div>
     </main>
 
     <footer>

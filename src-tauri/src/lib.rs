@@ -48,6 +48,11 @@ pub fn run() {
                 let s = state.settings.get();
                 commands::RESTRICT_TO_CSP
                     .store(s.restrict_to_csp, std::sync::atomic::Ordering::Relaxed);
+                input_hook::set_gestures_enabled(s.color_gestures);
+                match input_hook::gesture_vks_from_keys(&s.gesture_keys) {
+                    Ok(vks) => input_hook::set_gesture_vks(vks),
+                    Err(e) => eprintln!("[HOOK] gesture keys in settings.json ignored: {e}"),
+                }
                 s
             };
 
@@ -66,6 +71,7 @@ pub fn run() {
             let shortcut_settings_handle = app.handle().clone();
             let shortcut_action_handle = app.handle().clone();
             let escape_handle = app.handle().clone();
+            let gesture_handle = app.handle().clone();
             input_hook::install_shortcut(
                 move || {
                     let state: tauri::State<'_, AppState> = shortcut_settings_handle.state();
@@ -78,7 +84,11 @@ pub fn run() {
                 move || {
                     // Off the hook thread: window calls must not stall it.
                     let handle = escape_handle.clone();
-                    thread::spawn(move || commands::hide_palette(&handle, "escape"));
+                    thread::spawn(move || commands::escape_pressed(&handle));
+                },
+                move |dim, down| {
+                    let handle = gesture_handle.clone();
+                    thread::spawn(move || commands::gesture_key(&handle, dim, down));
                 },
             );
 
@@ -303,6 +313,12 @@ pub fn run() {
             commands::show_palette_at_cursor,
             commands::show_shield,
             commands::dismiss_palette,
+            commands::gesture_color,
+            commands::gesture_end,
+            commands::set_color_gestures,
+            commands::set_gesture_keys,
+            commands::set_gesture_sensitivity,
+            commands::set_settings_tab,
             commands::debug_enabled,
             commands::debug_log,
             commands::start_qr_scan,
