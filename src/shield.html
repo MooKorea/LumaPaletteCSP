@@ -41,6 +41,14 @@
         from { opacity: 0; transform: translateY(4px) scale(0.96); }
         to { opacity: 1; transform: none; }
       }
+      #hud.hide {
+        transform-origin: 50% 100%;
+        animation: hud-out 120ms ease-in both;
+      }
+      @keyframes hud-out {
+        from { opacity: 1; transform: none; }
+        to { opacity: 0; transform: translateY(3px) scale(0.98); }
+      }
       #tape {
         display: block;
         border-radius: 4px;

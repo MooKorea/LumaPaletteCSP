@@ -256,8 +256,8 @@ function releaseDrag() {
 function endGesture() {
   mode = "dismiss";
   surface.classList.remove("armed", "dragging");
-  hideHud();
-  invoke("gesture_end").catch(() => {});
+  // Let the HUD fade before the shield window drops out from under it.
+  fadeOutHud(() => invoke("gesture_end").catch(() => {}));
 }
 
 // ---- color send -----------------------------------------------------------------
@@ -286,19 +286,40 @@ function flushSend(hex) {
 
 // ---- HUD --------------------------------------------------------------------------
 
+const HUD_OUT_MS = 120;
+let hudHideTimer = null;
+
 function showHud() {
   renderHud();
+  if (hudHideTimer) {
+    // Re-armed mid fade-out: keep it, and skip the pending gesture_end.
+    clearTimeout(hudHideTimer);
+    hudHideTimer = null;
+    hud.classList.remove("hide");
+    hud.classList.add("show");
+    return;
+  }
   if (hud.hidden) {
     hud.hidden = false;
-    hud.classList.remove("show");
+    hud.classList.remove("show", "hide");
     void hud.offsetWidth; // restart the entrance animation
     hud.classList.add("show");
   }
 }
 
-function hideHud() {
-  hud.hidden = true;
+function fadeOutHud(done) {
+  if (hud.hidden || hudHideTimer) {
+    if (hud.hidden) done();
+    return;
+  }
   hud.classList.remove("show");
+  hud.classList.add("hide");
+  hudHideTimer = setTimeout(() => {
+    hudHideTimer = null;
+    hud.hidden = true;
+    hud.classList.remove("hide");
+    done();
+  }, HUD_OUT_MS);
 }
 
 function placeHud(x, y) {
